@@ -41,7 +41,9 @@ export default function BuyPage() {
   const [supportThread, setSupportThread] = useState<Array<{ direction: string; message: string; created_at: string }>>([]);
 
   useEffect(() => {
-    fetch('/api/config')
+    // No-store: the home page must always show the CURRENT admin settings,
+    // never a cached copy of /api/config.
+    fetch('/api/config', { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => {
         if (j.error) setConfigError(j.error);

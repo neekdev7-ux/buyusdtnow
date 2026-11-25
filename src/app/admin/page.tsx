@@ -47,6 +47,7 @@ export default function AdminPage() {
   const [verifyResults, setVerifyResults] = useState<Record<string, { ok: boolean; text: string }>>({});
   const [verifyBusy, setVerifyBusy] = useState<Record<string, boolean>>({});
   const [supportMessages, setSupportMessages] = useState<Array<{ id: string; telegram_id: string; telegram_username: string | null; direction: string; message: string; created_at: string }>>([]);
+  const [users, setUsers] = useState<Array<{ telegram_id: string; telegram_username: string | null; first_name: string | null; first_seen_at: string; last_seen_at: string; order_count: number; total_usdt: number }>>([]);
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
   const [replySent, setReplySent] = useState('');
   const [rateHistory, setRateHistory] = useState<Array<{ id: string; old_rate: number; new_rate: number; created_at: string }>>([]);
@@ -78,12 +79,14 @@ export default function AdminPage() {
   }
 
   async function loadAll(t: string) {
-    const [sRes, oRes] = await Promise.all([
-      fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${t}` } }),
-      fetch('/api/admin/orders', { headers: { Authorization: `Bearer ${t}` } }),
+    const [sRes, oRes, uRes] = await Promise.all([
+      fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${t}` }, cache: 'no-store' }),
+      fetch('/api/admin/orders', { headers: { Authorization: `Bearer ${t}` }, cache: 'no-store' }),
+      fetch('/api/admin/users', { headers: { Authorization: `Bearer ${t}` }, cache: 'no-store' }),
     ]);
     const s = await sRes.json();
     const o = await oRes.json();
+    const u = await uRes.json();
     if (!sRes.ok) {
       setError(s.error || 'Could not load settings.');
       if (sRes.status === 401) {
@@ -98,7 +101,8 @@ export default function AdminPage() {
       setOrders(o.orders || []);
       setStats(o.stats || null);
     }
-    const supRes = await fetch('/api/admin/support', { headers: { Authorization: `Bearer ${t}` } });
+    if (uRes.ok && Array.isArray(u.users)) setUsers(u.users);
+    const supRes = await fetch('/api/admin/support', { headers: { Authorization: `Bearer ${t}` }, cache: 'no-store' });
     const sup = await supRes.json();
     if (supRes.ok) setSupportMessages(sup.messages || []);
   }
@@ -290,6 +294,40 @@ export default function AdminPage() {
           <div className="summary-row"><span>Awaiting payment</span><b>{stats.awaiting}</b></div>
         </div>
       )}
+
+      <div className="card">
+        <h2>Users ({users.length})</h2>
+        <button className="btn-small" onClick={() => loadAll(token)} style={{ marginBottom: 10 }}>Refresh</button>
+        {users.length === 0 && (
+          <p className="subtitle">
+            No users recorded yet. Users appear here the first time they start the bot (/start),
+            send a support message, or place an order. If the list stays empty, run
+            supabase-migration-users.sql once in the Supabase SQL Editor to create the users table.
+          </p>
+        )}
+        <div style={{ overflowX: 'auto' }}>
+          <table className="admin">
+            <thead>
+              <tr><th>User</th><th>First seen</th><th>Last seen</th><th>Orders</th><th>Total USDT</th></tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.telegram_id}>
+                  <td>
+                    <span className="mono">@{u.telegram_username || u.telegram_id}</span>
+                    {u.first_name && <><br />{u.first_name}</>}
+                    <br /><span className="mono">{u.telegram_id}</span>
+                  </td>
+                  <td>{new Date(u.first_seen_at).toLocaleString()}</td>
+                  <td>{new Date(u.last_seen_at).toLocaleString()}</td>
+                  <td>{u.order_count}</td>
+                  <td>{Number(u.total_usdt || 0).toLocaleString()} USDT</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {settings && (
         <div className="card">

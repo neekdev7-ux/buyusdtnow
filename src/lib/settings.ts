@@ -1,19 +1,16 @@
 import { db } from './supabase';
 import { MARKET_REFERENCE } from './rates';
+import {
+  applySettingsRows,
+  isPaymentAddressConfigured,
+  publicConfig,
+  type ExchangeSettings,
+  type SettingsRow,
+} from './settings-merge';
 
 export { MARKET_REFERENCE } from './rates';
-
-export interface ExchangeSettings {
-  trxRate: number; // TRX per 1 USDT (fixed)
-  minBuyUsdt: number;
-  maxBuyUsdt: number;
-  expiryMinutes: number;
-  trxPaymentAddress: string; // admin wallet receiving TRX
-  usdtHotWalletAddress: string; // hot wallet sending USDT
-  supportUsername: string;
-  autoSendUsdt: boolean;
-  maxAutoSendUsdt: number;
-}
+export { applySettingsRows, isPaymentAddressConfigured, publicConfig };
+export type { ExchangeSettings, SettingsRow };
 
 export const DEFAULT_SETTINGS: ExchangeSettings = {
   trxRate: Number(process.env.FIXED_TRX_PER_USDT || 3.5),
@@ -27,59 +24,47 @@ export const DEFAULT_SETTINGS: ExchangeSettings = {
   maxAutoSendUsdt: Number(process.env.MAX_AUTO_SEND_USDT || 5000),
 };
 
-/** A placeholder / unset payment address — the app must show "not configured". */
-export function isPaymentAddressConfigured(addr: string): boolean {
-  return Boolean(addr) && /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(addr);
+/** Where the returned settings came from — 'db' means the settings table was read live. */
+export type SettingsSource = 'db' | 'defaults';
+
+export interface SettingsWithMeta {
+  settings: ExchangeSettings;
+  /** 'db' when the settings table was read successfully, 'defaults' when the DB read failed. */
+  source: SettingsSource;
+  /** Newest updated_at among the settings rows (null when the DB read failed / no rows). */
+  updatedAt: string | null;
+  /** Non-empty when the DB read failed — the reason, for server logs. */
+  error?: string;
 }
 
-const DB_KEY_MAP: Record<string, keyof ExchangeSettings> = {
-  trx_rate: 'trxRate',
-  min_buy_usdt: 'minBuyUsdt',
-  max_buy_usdt: 'maxBuyUsdt',
-  expiry_minutes: 'expiryMinutes',
-  trx_payment_address: 'trxPaymentAddress',
-  usdt_hot_wallet_address: 'usdtHotWalletAddress',
-  support_username: 'supportUsername',
-  auto_send_usdt: 'autoSendUsdt',
-  max_auto_send_usdt: 'maxAutoSendUsdt',
-};
+/**
+ * Settings = env defaults, overridden by rows in the `settings` table (admin edits).
+ * Never throws: on a DB failure it returns the env defaults AND reports the
+ * failure (source 'defaults' + error) instead of silently pretending the
+ * defaults are the live settings — a silent fallback previously made a
+ * broken DB read invisible (admin saves did not reach the home page).
+ */
+export async function getSettingsWithMeta(): Promise<SettingsWithMeta> {
+  try {
+    const { data, error } = await db().from('settings').select('key, value, updated_at');
+    if (error) {
+      console.warn('[settings] DB read failed, using env defaults:', error.message);
+      return { settings: { ...DEFAULT_SETTINGS }, source: 'defaults', updatedAt: null, error: error.message };
+    }
+    const rows = (data || []) as SettingsRow[];
+    const updatedAt = rows.reduce<string | null>(
+      (latest, r) => (!r.updated_at ? latest : !latest || r.updated_at > latest ? r.updated_at : latest),
+      null,
+    );
+    return { settings: applySettingsRows(DEFAULT_SETTINGS, rows), source: 'db', updatedAt };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('[settings] DB read failed, using env defaults:', message);
+    return { settings: { ...DEFAULT_SETTINGS }, source: 'defaults', updatedAt: null, error: message };
+  }
+}
 
 /** Settings = env defaults, overridden by rows in the `settings` table (admin edits). */
 export async function getSettings(): Promise<ExchangeSettings> {
-  const settings: ExchangeSettings = { ...DEFAULT_SETTINGS };
-  try {
-    const { data, error } = await db().from('settings').select('key, value');
-    if (error || !data) return settings;
-    for (const row of data as { key: string; value: string }[]) {
-      const field = DB_KEY_MAP[row.key];
-      if (!field) continue;
-      const current = settings[field];
-      if (typeof current === 'number') {
-        const n = Number(row.value);
-        if (Number.isFinite(n)) (settings as unknown as Record<string, unknown>)[field] = n;
-      } else if (typeof current === 'boolean') {
-        (settings as unknown as Record<string, unknown>)[field] = row.value === 'true';
-      } else {
-        (settings as unknown as Record<string, unknown>)[field] = row.value;
-      }
-    }
-  } catch {
-    // DB unavailable / not configured — fall back to env defaults.
-  }
-  return settings;
+  return (await getSettingsWithMeta()).settings;
 }
-
-/** Public config payload for the buy page (no secrets). */
-export function publicConfig(settings: ExchangeSettings) {
-  return {
-    trxRate: settings.trxRate,
-    minBuyUsdt: settings.minBuyUsdt,
-    maxBuyUsdt: settings.maxBuyUsdt,
-    expiryMinutes: settings.expiryMinutes,
-    paymentAddress: settings.trxPaymentAddress,
-    paymentAddressConfigured: isPaymentAddressConfigured(settings.trxPaymentAddress),
-    supportUsername: settings.supportUsername,
-    autoSendUsdt: settings.autoSendUsdt,
-  };
-}
-

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, isSupabaseConfigured } from '@/lib/supabase';
 import { notifyAdmin, sendTelegramMessage } from '@/lib/notify';
+import { upsertUser } from '@/lib/users';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,8 @@ export async function POST(req: NextRequest) {
   };
 
   if (text === '/start' || text.startsWith('/start ')) {
+    // Record the user (best-effort — never blocks the welcome message).
+    if (fromId) void upsertUser(String(fromId), username || null, from.first_name || null);
     await sendTelegramMessage(
       chatId,
       '👋 Welcome to the TRX → USDT Exchange!\n\n' +
@@ -99,6 +102,8 @@ export async function POST(req: NextRequest) {
   } else if (text && message.chat.type === 'private') {
     // Plain DM = support message: store it and forward to the admin.
     if (fromId && isSupabaseConfigured()) {
+      // Record the user (best-effort) so support senders show in /admin Users.
+      void upsertUser(String(fromId), username || null, from.first_name || null);
       await db().from('support_messages').insert({
         telegram_id: String(fromId),
         telegram_username: username || null,

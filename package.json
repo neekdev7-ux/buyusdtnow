@@ -21,7 +21,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "test": "node --test tests/tron.test.ts tests/txid.test.ts tests/admin.test.ts tests/me.test.ts tests/no-referrals.test.ts"
+    "test": "node --test tests/tron.test.ts tests/txid.test.ts tests/admin.test.ts tests/me.test.ts tests/no-referrals.test.ts tests/settings-users.test.ts"
   },
   "version": "1.0.0"
 }

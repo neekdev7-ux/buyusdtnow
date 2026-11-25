@@ -3,6 +3,7 @@ import { db, isSupabaseConfigured } from '@/lib/supabase';
 import { getSettings, isPaymentAddressConfigured } from '@/lib/settings';
 import { calcTrxAmount, isValidTrc20Address, orderExpiry } from '@/lib/tron';
 import { telegramUserFromInitData } from '@/lib/telegram';
+import { upsertUser } from '@/lib/users';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +66,10 @@ export async function POST(req: NextRequest) {
     verified = true;
   }
   if (!telegramId) telegramId = 'web-unknown';
+
+  // Record the user (best-effort) so every buyer shows in /admin Users,
+  // even if they never message support or start the bot.
+  if (telegramId !== 'web-unknown') void upsertUser(telegramId, telegramUsername || null);
 
   // Rate-locked snapshot: the rate at creation time is what the user pays.
   const { trx, sun } = calcTrxAmount(usdtAmount, settings.trxRate);

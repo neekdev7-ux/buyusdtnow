@@ -6,6 +6,11 @@ import type { SettingsValues } from '@/lib/settings-validate';
 import { verifyAdminToken } from '@/lib/admin';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+// Admin responses are explicitly no-store: the admin panel must always show
+// the live data, never a cached copy.
+const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate' };
 
 function unauthorized(req: NextRequest): boolean {
   const auth = req.headers.get('authorization') || '';
@@ -53,13 +58,13 @@ async function loadRateHistory(): Promise<RateHistoryRow[]> {
 // GET /api/admin/settings — full settings (admin only; still no private keys)
 // + rate history (empty array when the migration has not been run yet).
 export async function GET(req: NextRequest) {
-  if (unauthorized(req)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (unauthorized(req)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401, headers: NO_STORE });
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ error: 'Supabase not configured — see DEPLOY.md' }, { status: 500 });
+    return NextResponse.json({ error: 'Supabase not configured — see DEPLOY.md' }, { status: 500, headers: NO_STORE });
   }
   const settings = await getSettings();
   const rateHistory = await loadRateHistory();
-  return NextResponse.json({ settings, rateHistory });
+  return NextResponse.json({ settings, rateHistory }, { headers: NO_STORE });
 }
 
 // POST /api/admin/settings — { settings: {...} } — upserts into settings table.
@@ -95,8 +100,11 @@ export async function POST(req: NextRequest) {
   if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
 
   const oldRate = current.trxRate;
+  const savedAt = new Date().toISOString();
   for (const row of rows) {
-    const { error } = await db().from('settings').upsert(row, { onConflict: 'key' });
+    // updated_at is stamped on every save so /api/config can report when the
+    // settings were last changed (freshness signal for the home page).
+    const { error } = await db().from('settings').upsert({ ...row, updated_at: savedAt }, { onConflict: 'key' });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
   // Log a rate change (old → new). Best-effort: the table only exists after
@@ -111,5 +119,5 @@ export async function POST(req: NextRequest) {
   }
   const settings = await getSettings();
   const rateHistory = await loadRateHistory();
-  return NextResponse.json({ settings, saved: rows.length, rateHistory });
+  return NextResponse.json({ settings, saved: rows.length, rateHistory }, { headers: NO_STORE });
 }

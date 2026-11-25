@@ -162,6 +162,21 @@ table (DB overrides the env defaults):
   Editor); the table is also in `supabase-schema.sql` for fresh installs.
   Without the table the history list simply stays empty — saving settings
   still works.
+- **Users** — every Telegram user who starts the bot (`/start`), messages
+  support, or places an order is recorded in the `users` table
+  (`src/lib/users.ts`, best-effort — a missing table never breaks orders or
+  the webhook) and listed in `/admin` (first/last seen, order count, total
+  USDT). Needs the one-time migration `supabase-migration-users.sql` (run in
+  Supabase SQL Editor; it also backfills users from existing orders +
+  support messages); the table is also in `supabase-schema.sql` for fresh
+  installs. Without the table the Users list simply stays empty.
+- **Settings freshness** — `/api/config` always reads the live `settings`
+  table (admin edits reach the home page immediately). The response is
+  explicitly `no-store` (`revalidate = 0`) and carries `settingsUpdatedAt`
+  (newest `updated_at` in the table) + `settingsSource` (`db` vs
+  `defaults`); a failed DB read is logged server-side instead of silently
+  serving env defaults. The buy/support pages fetch config with
+  `cache: 'no-store'`, and admin API responses are no-store too.
 - **Delete (with confirm):** support messages can be deleted from the inbox;
   orders with status `EXPIRED` or `FAILED` (incl. admin-rejected) can be
   deleted from All orders. Paid / confirmed / completed orders can **never**
@@ -173,7 +188,8 @@ table (DB overrides the env defaults):
 
 | Route | Purpose |
 |---|---|
-| `GET /api/config` | Public rate, min/max, payment address, expiry |
+| `GET /api/config` | Public rate, min/max, payment address, expiry (live DB settings, no-store; includes `settingsUpdatedAt` + `settingsSource`) |
+| `GET /api/admin/users` | All users + order counts / total USDT (admin) |
 | `POST /api/orders/create` | Validate + create rate-locked order (verifies Telegram `initData` HMAC when `TELEGRAM_BOT_TOKEN` is set; otherwise the order is marked `verified: false` — see note below) |
 | `GET /api/orders/[id]` | One order (auto-expires on read) |
 | `GET /api/orders?telegram_id=…` | A user's orders |

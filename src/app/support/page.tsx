@@ -22,7 +22,8 @@ function SupportInner() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/config')
+    // No-store: always show the CURRENT support username from the DB.
+    fetch('/api/config', { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => {
         if (j.supportUsername) setSupportUsername(j.supportUsername);

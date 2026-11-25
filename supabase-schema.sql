@@ -46,6 +46,20 @@ on conflict (key) do nothing;
 -- (TRX_PAYMENT_ADDRESS / USDT_HOT_WALLET_ADDRESS) unless overridden here.
 -- Do NOT store private keys in this table, ever.
 
+-- Users (2026-11-25): every Telegram user who starts the bot, messages
+-- support, or places an order. Previously users existed only implicitly
+-- inside orders / support_messages, so the admin panel had no user list.
+-- upsertUser() in src/lib/users.ts writes here (best-effort — a missing
+-- table never breaks order creation or the webhook).
+create table if not exists users (
+  telegram_id text primary key,
+  telegram_username text,
+  first_name text,
+  first_seen_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now()
+);
+create index if not exists idx_users_last_seen on users (last_seen_at desc);
+
 -- Referrals (telegram_mini_app skill):
 --   link: t.me/<bot>/<app>?startapp=ref_<TELEGRAM_ID>
 --   pending_referrals: bot-level /start ref_CODE fallback, attached on first app open.
