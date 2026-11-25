@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import QRCode from 'qrcode';
 import { copyText, useTelegram } from '@/lib/useTelegram';
 import TelegramGate from '../../../components/TelegramGate';
+import FooterMenu from '../../../components/FooterMenu';
 
 interface Order {
   id: string;
@@ -178,6 +179,7 @@ function PayPageInner() {
       : Math.min(100, Math.round(((order.confirmations || 0) / 19) * 100));
 
   return (
+    <>
     <div className="wrap">
       <div className="header">
         <div className="logo">
@@ -339,5 +341,7 @@ function PayPageInner() {
       </div>
       <a href="/">← Create a new order</a>
     </div>
+    <FooterMenu />
+    </>
   );
 }

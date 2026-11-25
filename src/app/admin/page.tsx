@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import FooterMenu from '../../components/FooterMenu';
+import { validateSettings, canDeleteOrder } from '@/lib/settings-validate';
 
 interface Order {
   id: string;
@@ -47,6 +49,7 @@ export default function AdminPage() {
   const [supportMessages, setSupportMessages] = useState<Array<{ id: string; telegram_id: string; telegram_username: string | null; direction: string; message: string; created_at: string }>>([]);
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
   const [replySent, setReplySent] = useState('');
+  const [rateHistory, setRateHistory] = useState<Array<{ id: string; old_rate: number; new_rate: number; created_at: string }>>([]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('trx-usdt-admin-token');
@@ -90,6 +93,7 @@ export default function AdminPage() {
       return;
     }
     setSettings(s.settings);
+    if (Array.isArray(s.rateHistory)) setRateHistory(s.rateHistory);
     if (oRes.ok) {
       setOrders(o.orders || []);
       setStats(o.stats || null);
@@ -126,6 +130,11 @@ export default function AdminPage() {
     if (!settings) return;
     setError('');
     setSaved('');
+    const check = validateSettings(settings);
+    if (!check.ok) {
+      setError(check.error);
+      return;
+    }
     const res = await fetch('/api/admin/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -133,7 +142,32 @@ export default function AdminPage() {
     });
     const j = await res.json();
     if (!res.ok) setError(j.error || 'Could not save settings.');
-    else setSaved('Settings saved ✓');
+    else {
+      setSaved('Settings saved ✓');
+      if (Array.isArray(j.rateHistory)) setRateHistory(j.rateHistory);
+    }
+  }
+
+  async function deleteOrder(orderId: string) {
+    if (!window.confirm('Delete this order permanently? Only expired / failed orders can be deleted — paid or completed orders can never be deleted.')) return;
+    const res = await fetch(`/api/admin/orders/${orderId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const j = await res.json();
+    if (!res.ok) setError(j.error || 'Could not delete order.');
+    else loadAll(token);
+  }
+
+  async function deleteSupportMessage(messageId: string) {
+    if (!window.confirm('Delete this support message permanently?')) return;
+    const res = await fetch(`/api/admin/support/${messageId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const j = await res.json();
+    if (!res.ok) setError(j.error || 'Could not delete message.');
+    else loadAll(token);
   }
 
   async function markSent(orderId: string) {
@@ -208,6 +242,7 @@ export default function AdminPage() {
 
   if (!token) {
     return (
+      <>
       <div className="wrap">
         <div className="header">
           <div className="logo"><span className="trx">TRX</span> → <span className="usdt">USDT</span> Admin</div>
@@ -222,6 +257,8 @@ export default function AdminPage() {
           <button className="btn-primary" style={{ marginTop: 14 }} onClick={login}>Log in</button>
         </div>
       </div>
+      <FooterMenu />
+      </>
     );
   }
 
@@ -229,6 +266,7 @@ export default function AdminPage() {
   const pendingReview = orders.filter((o) => o.status === 'TXID_SUBMITTED');
 
   return (
+    <>
     <div className="wrap">
       <div className="header">
         <div className="logo"><span className="trx">TRX</span> → <span className="usdt">USDT</span> Admin</div>
@@ -305,6 +343,20 @@ export default function AdminPage() {
         </div>
       )}
 
+      <div className="card">
+        <h2><i className="fa fa-history" aria-hidden="true" /> Rate history</h2>
+        {rateHistory.length === 0 && (
+          <p className="subtitle">No rate changes recorded yet. Every rate change is logged here (old → new).</p>
+        )}
+        {rateHistory.slice(0, 20).map((h) => (
+          <div key={h.id} className="summary-row">
+            <span>{new Date(h.created_at).toLocaleString()}</span>
+            <b>{Number(h.old_rate)} → {Number(h.new_rate)} TRX / USDT</b>
+          </div>
+        ))}
+        <div className="hint">History needs the `rate_history` table — run supabase-migration-rate-history.sql once (see README). If it is not run yet, this list simply stays empty; saving settings still works.</div>
+      </div>
+
       {pendingReview.length > 0 && (
         <div className="card">
           <h2>🧾 Pending TXID review ({pendingReview.length}) — user submitted a TXID, verify on TronGrid</h2>
@@ -371,16 +423,21 @@ export default function AdminPage() {
               {' · '}{new Date(m.created_at).toLocaleString()}
               <br />{m.message}
             </div>
-            {m.direction === 'user' && (
-              <div className="input-row" style={{ marginTop: 8 }}>
-                <input
-                  placeholder="Reply… (sent in-app + Telegram DM)"
-                  value={replyInputs[m.id] || ''}
-                  onChange={(e) => setReplyInputs({ ...replyInputs, [m.id]: e.target.value })}
-                />
-                <button className="paste-btn" onClick={() => replyToSupport(m.id, m.telegram_id)}>Reply</button>
-              </div>
-            )}
+            <div className="input-row" style={{ marginTop: 8 }}>
+              {m.direction === 'user' && (
+                <>
+                  <input
+                    placeholder="Reply… (sent in-app + Telegram DM)"
+                    value={replyInputs[m.id] || ''}
+                    onChange={(e) => setReplyInputs({ ...replyInputs, [m.id]: e.target.value })}
+                  />
+                  <button className="paste-btn" onClick={() => replyToSupport(m.id, m.telegram_id)}>Reply</button>
+                </>
+              )}
+              <button className="btn-danger" onClick={() => deleteSupportMessage(m.id)}>
+                <i className="fa fa-trash" aria-hidden="true" /> Delete
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -425,6 +482,11 @@ export default function AdminPage() {
                     {['AWAITING_PAYMENT', 'TRX_RECEIVED'].includes(o.status) && (
                       <button className="btn-small" onClick={() => reject(o.id)}>Reject</button>
                     )}
+                    {canDeleteOrder(o.status) && (
+                      <button className="btn-danger" style={{ marginLeft: 6 }} onClick={() => deleteOrder(o.id)}>
+                        <i className="fa fa-trash" aria-hidden="true" /> Delete
+                      </button>
+                    )}
                     <div style={{ marginTop: 6 }}><a href={`/pay/${o.id}`}>View →</a></div>
                   </td>
                 </tr>
@@ -435,5 +497,7 @@ export default function AdminPage() {
         {orders.length === 0 && <p className="subtitle">No orders yet.</p>}
       </div>
     </div>
+    <FooterMenu />
+    </>
   );
 }

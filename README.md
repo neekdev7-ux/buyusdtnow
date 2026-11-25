@@ -118,7 +118,52 @@ include a spread — update it when TRX moves (see SECURITY.md).
 | `/` (Buy) | Rate display, amount chips (1000/2000/5000/10000/20000) + custom input, TRC20 address input with validation + paste, live TRX-to-pay, Create Order |
 | `/pay/[id]` | Exact TRX amount, payment address + copy + QR code, 30-min countdown, 15s status polling, TronScan links, "I Have Paid" button, manual TXID submission (timer freezes while under admin review) |
 | `/orders` | The user's orders by Telegram ID, with status + TXIDs |
-| `/admin` | Password login (`ADMIN_PASSWORD`), change rate/wallets/min/max, stats, pending TXID review (confirm/reject), pending payouts, mark USDT sent (with TXID), reject orders |
+| `/support` | User ↔ admin support conversation (same inbox as the bot DMs) |
+| `/admin` | Password login (`ADMIN_PASSWORD`), change rate/wallets/min/max, rate history, stats, pending TXID review (confirm/reject), pending payouts, mark USDT sent (with TXID), reject orders, delete expired/failed orders + support messages |
+
+### Footer menubar (mobile-first)
+
+Every main page has a fixed bottom menubar with Font Awesome 4.7 icon buttons
+(CDN stylesheet in `layout.tsx`):
+
+| Tab | Icon | Goes to |
+|---|---|---|
+| Buy | `fa fa-home` | `/` |
+| Orders | `fa fa-list-alt` | `/orders` |
+| Support | `fa fa-headset` | `/support` |
+| Admin | `fa fa-cog` | `/admin` |
+
+The active tab is highlighted in gold; inactive tabs are muted. The page
+container has extra bottom padding so the menubar never covers content
+(`.wrap` padding-bottom + `env(safe-area-inset-bottom)` on notched phones).
+The menubar is rendered inside each page, not in the root layout, so the
+Telegram identity gate screen stays untouched.
+
+### Admin: rate & price management
+
+`/admin` → **Settings** edits every price control and saves to the `settings`
+table (DB overrides the env defaults):
+
+- Fixed rate (TRX per USDT), min buy (≥ 100 USDT), max buy (> min),
+  order expiry (≥ 5 min), TRX receive wallet, USDT hot-wallet address,
+  support username, auto-send toggle + max auto-send.
+- Validation runs in the browser **and** on the server (`src/lib/settings-validate.ts`,
+  same rules both sides): rate > 0, min ≥ 100, max > min, expiry ≥ 5,
+  wallet addresses must be valid TRON addresses when set. A partial save is
+  validated against the merged settings, so it can never leave an invalid
+  combination.
+- **Rate history** — every rate change is logged (old → new, when) in the
+  `rate_history` table and listed in `/admin`. It needs the one-time
+  migration `supabase-migration-rate-history.sql` (run in Supabase SQL
+  Editor); the table is also in `supabase-schema.sql` for fresh installs.
+  Without the table the history list simply stays empty — saving settings
+  still works.
+- **Delete (with confirm):** support messages can be deleted from the inbox;
+  orders with status `EXPIRED` or `FAILED` (incl. admin-rejected) can be
+  deleted from All orders. Paid / confirmed / completed orders can **never**
+  be deleted — the server refuses them (400). Mark-sent (with TXID) and
+  reject flows are unchanged. All admin API routes stay behind the existing
+  `ADMIN_PASSWORD` HMAC token check.
 
 ## API routes
 
@@ -132,7 +177,10 @@ include a spread — update it when TRX moves (see SECURITY.md).
 | `POST /api/orders/[id]/submit-txid` | User submits the TRX TXID (64 hex chars) → TXID_SUBMITTED, timer freezes, admin notified (verifies Telegram `initData` when `TELEGRAM_BOT_TOKEN` is set) |
 | `GET/POST /api/cron/check-payments` | Cron: check all pending orders + expire stale ones (once daily, `vercel.json`) |
 | `POST /api/admin/login` | Admin password → stateless HMAC token |
-| `GET/POST /api/admin/settings` | Read / update exchange settings |
+| `GET /api/admin/settings` | Read settings + rate history (empty when the migration is not run) |
+| `POST /api/admin/settings` | Update settings (merged validation; logs rate changes to `rate_history`) |
+| `DELETE /api/admin/orders/[id]` | Delete an EXPIRED / FAILED order only (paid/completed refused) |
+| `DELETE /api/admin/support/[id]` | Delete one support message |
 | `GET /api/admin/orders` | All orders + stats (incl. `txidSubmitted` count) |
 | `POST /api/admin/orders/[id]/confirm-deposit` | Admin: verify the submitted TXID on TronGrid (≥ 19 conf, exact address + amount) → confirmed path + user DM |
 | `POST /api/admin/orders/[id]/reject-deposit` | Admin: reject a TXID_SUBMITTED order with a reason → FAILED + user DM |

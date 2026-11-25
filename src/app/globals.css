@@ -7,6 +7,7 @@
   --muted: #9a9aa3;
   --tron-red: #ff0013;
   --usdt-green: #26a17b;
+  --gold: #f2b705;
   --warn: #ffb020;
   --danger: #ff4d4d;
 }
@@ -22,7 +23,24 @@ a { color: var(--usdt-green); }
 button { font-family: inherit; cursor: pointer; }
 input { font-family: inherit; }
 
-.wrap { max-width: 520px; margin: 0 auto; padding: 16px 16px 40px; }
+.wrap { max-width: 520px; margin: 0 auto; padding: 16px 16px 104px; /* bottom room for the fixed footer menubar */ }
+
+/* Bottom footer menubar — fixed, always visible, thumb-friendly. */
+.footer-menu {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  display: flex; background: rgba(17, 17, 20, 0.97);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  backdrop-filter: blur(8px);
+}
+.footer-tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; min-height: 58px; padding: 9px 0 8px;
+  color: var(--muted); text-decoration: none; font-size: 11px; font-weight: 700;
+}
+.footer-tab i { font-size: 20px; line-height: 1; }
+.footer-tab.active { color: var(--gold); background: rgba(242, 183, 5, 0.08); }
+.footer-tab:active { background: var(--surface-2); }
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .logo { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
 .logo .trx { color: var(--tron-red); }
@@ -84,6 +102,11 @@ input { font-family: inherit; }
 .btn-small {
   background: var(--surface-2); color: var(--text);
   border: 1px solid var(--border); border-radius: 9px; padding: 7px 12px;
+  font-size: 13px; font-weight: 700;
+}
+.btn-danger {
+  background: #2a0a0d; color: #ff8a8a;
+  border: 1px solid #5a1418; border-radius: 9px; padding: 7px 12px;
   font-size: 13px; font-weight: 700;
 }
 .status-pill {

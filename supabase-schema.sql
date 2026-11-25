@@ -89,3 +89,15 @@ alter table orders add column if not exists txid_submitted_at timestamptz;
 alter table orders add column if not exists txid_submitted_by text;
 alter table orders add column if not exists admin_review_note text;
 create index if not exists idx_orders_txid_submitted on orders (status) where status = 'TXID_SUBMITTED';
+
+-- Rate history (2026-11-25): every admin rate change is logged old → new.
+-- Optional — the app works without it (the history list just stays empty).
+-- Also available as supabase-migration-rate-history.sql for existing DBs.
+create table if not exists rate_history (
+  id uuid primary key default gen_random_uuid(),
+  old_rate numeric(18, 6) not null,
+  new_rate numeric(18, 6) not null,
+  changed_by text not null default 'admin',
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_rate_history_created on rate_history (created_at desc);

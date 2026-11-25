@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTelegram, copyText } from '@/lib/useTelegram';
 import TelegramGate from '../components/TelegramGate';
+import FooterMenu from '../components/FooterMenu';
 
 const CHIPS = [1000, 2000, 5000, 10000, 20000];
 const ADDR_RE = /^T[1-9A-HJ-NP-Za-km-z]{33}$/;
@@ -340,6 +341,7 @@ export default function BuyPage() {
         </div>
       </div>
     </div>
+    <FooterMenu />
     </TelegramGate>
   );
 }

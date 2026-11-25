@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTelegram } from '@/lib/useTelegram';
 import TelegramGate from '../../components/TelegramGate';
+import FooterMenu from '../../components/FooterMenu';
 
 interface Order {
   id: string;
@@ -72,6 +73,7 @@ function MyOrdersInner() {
   }, [telegramId]);
 
   return (
+    <>
     <div className="wrap">
       <div className="header">
         <div className="logo">
@@ -134,5 +136,7 @@ function MyOrdersInner() {
         </div>
       ))}
     </div>
+    <FooterMenu />
+    </>
   );
 }
