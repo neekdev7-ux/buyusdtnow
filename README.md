@@ -131,7 +131,17 @@ Every main page has a fixed bottom menubar with Font Awesome 4.7 icon buttons
 | Buy | `fa fa-home` | `/` |
 | Orders | `fa fa-list-alt` | `/orders` |
 | Support | `fa fa-headset` | `/support` |
-| Admin | `fa fa-cog` | `/admin` |
+| Admin | `fa fa-cog` | `/admin` — **admin only** (see below) |
+
+The **Admin tab is hidden from regular users**: the menubar asks `POST /api/me`
+with the current Telegram `initData`; the server verifies it with
+`TELEGRAM_BOT_TOKEN` and compares the user id to `ADMIN_TELEGRAM_ID`
+(server env only — never in client code). While the check is loading the
+tab stays hidden, so it never flashes for users. The Buy page's top-nav
+Admin link follows the same check. On `/admin` itself (opened in a browser
+after password login, where there is no `initData`) the tab is forced
+visible. Hiding the tab is UI-only — `/admin` still requires the
+`ADMIN_PASSWORD` login.
 
 The active tab is highlighted in gold; inactive tabs are muted. The page
 container has extra bottom padding so the menubar never covers content

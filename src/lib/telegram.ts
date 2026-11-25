@@ -45,3 +45,21 @@ export function telegramUserFromInitData(
   if (!token || !initData) return null;
   return validateInitData(initData, token);
 }
+
+/**
+ * Is the Telegram user behind this initData the admin?
+ * Server-side only: initData is verified with TELEGRAM_BOT_TOKEN and the
+ * user id is compared to ADMIN_TELEGRAM_ID from the server env. The admin
+ * id is never embedded in client code. Returns false when the bot token or
+ * the admin id is not configured, or initData is invalid.
+ * Used by POST /api/me to decide whether the footer menubar shows the
+ * Admin tab. Hiding the tab is UI-only — /admin still requires the password.
+ * (Lives here, not in lib/admin.ts, so it stays importable by plain
+ * node --test type-stripping: this file has no relative imports.)
+ */
+export function isTelegramAdmin(initData: string | undefined | null): boolean {
+  const adminId = process.env.ADMIN_TELEGRAM_ID;
+  if (!adminId || !initData) return false;
+  const user = telegramUserFromInitData(initData);
+  return user !== null && String(user.id) === adminId;
+}

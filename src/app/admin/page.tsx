@@ -497,7 +497,7 @@ export default function AdminPage() {
         {orders.length === 0 && <p className="subtitle">No orders yet.</p>}
       </div>
     </div>
-    <FooterMenu />
+    <FooterMenu forceShowAdmin />
     </>
   );
 }

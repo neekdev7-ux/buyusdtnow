@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTelegram, copyText } from '@/lib/useTelegram';
+import { useIsAdmin } from '@/lib/useIsAdmin';
 import TelegramGate from '../components/TelegramGate';
 import FooterMenu from '../components/FooterMenu';
 
@@ -28,6 +29,7 @@ interface Config {
 export default function BuyPage() {
   const router = useRouter();
   const { user, initData, ready, hasInitData, startParam } = useTelegram();
+  const isAdmin = useIsAdmin(initData);
   const [config, setConfig] = useState<Config | null>(null);
   const [configError, setConfigError] = useState('');
   const [amount, setAmount] = useState<number>(1000);
@@ -166,7 +168,7 @@ export default function BuyPage() {
       <div className="nav" style={{ marginBottom: 14 }}>
         <a href="/" className="active">Buy</a>
         <a href="/orders">My Orders</a>
-        <a href="/admin">Admin</a>
+        {isAdmin && <a href="/admin">Admin</a>}
       </div>
       <p className="subtitle">Buy USDT (TRC20) with TRX at a fixed rate. Pay TRX — USDT is sent to your wallet after the payment is confirmed on-chain.</p>
 
