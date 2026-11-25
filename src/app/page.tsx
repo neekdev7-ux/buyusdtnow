@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTelegram, copyText } from '@/lib/useTelegram';
+import { useTelegram } from '@/lib/useTelegram';
 import { useIsAdmin } from '@/lib/useIsAdmin';
 import TelegramGate from '../components/TelegramGate';
 import FooterMenu from '../components/FooterMenu';
@@ -20,15 +20,13 @@ interface Config {
   supportUsername: string;
   telegram?: {
     botUsername: string;
-    appShortName: string;
     officialChannel: string;
-    referralBaseUrl: string;
   };
 }
 
 export default function BuyPage() {
   const router = useRouter();
-  const { user, initData, ready, hasInitData, startParam } = useTelegram();
+  const { user, initData, ready, hasInitData } = useTelegram();
   const isAdmin = useIsAdmin(initData);
   const [config, setConfig] = useState<Config | null>(null);
   const [configError, setConfigError] = useState('');
@@ -38,8 +36,6 @@ export default function BuyPage() {
   const [addressTouched, setAddressTouched] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState('');
-  const [refCount, setRefCount] = useState<number | null>(null);
   const [supportText, setSupportText] = useState('');
   const [supportSent, setSupportSent] = useState('');
   const [supportThread, setSupportThread] = useState<Array<{ direction: string; message: string; created_at: string }>>([]);
@@ -54,22 +50,9 @@ export default function BuyPage() {
       .catch(() => setConfigError('Could not load exchange config. Check your connection.'));
   }, []);
 
-  // Referral attach: on first app open (startapp ref_CODE, or a pending
-  // bot-level /start referral recorded by the webhook). Runs only once the
-  // Telegram script has exposed initData.
+  // Load the support thread once the Telegram script has exposed initData.
   useEffect(() => {
     if (!ready || !hasInitData || !user) return;
-    fetch('/api/referrals/attach', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData, startParam }),
-    }).catch(() => {});
-    fetch(`/api/referrals?telegram_id=${user.id}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (typeof j.count === 'number') setRefCount(j.count);
-      })
-      .catch(() => {});
     fetch(`/api/support?telegram_id=${user.id}`)
       .then((r) => r.json())
       .then((j) => {
@@ -151,11 +134,6 @@ export default function BuyPage() {
     setSupportSent('Message sent to support ✓ — the admin will reply here and by Telegram DM.');
     setSupportThread((t) => [...t, { direction: 'user', message: j.message.message, created_at: j.message.created_at }]);
   }
-
-  const referralLink =
-    config?.telegram?.referralBaseUrl && user
-      ? `${config.telegram.referralBaseUrl}?startapp=ref_${user.id}`
-      : null;
 
   return (
     <TelegramGate>
@@ -288,34 +266,6 @@ export default function BuyPage() {
           4. USDT is sent <b>only</b> after the TRX payment is confirmed on-chain.<br />
           Support: @{config?.supportUsername || 'YourSupport'}
         </div>
-      </div>
-
-      <div className="card">
-        <h2>Invite friends</h2>
-        {referralLink ? (
-          <>
-            <div className="addr-box">
-              <span className="mono">{referralLink}</span>
-              <button
-                className="btn-small"
-                onClick={async () => {
-                  await copyText(referralLink);
-                  setCopied('ref');
-                  setTimeout(() => setCopied(''), 2000);
-                }}
-              >
-                {copied === 'ref' ? 'Copied ✓' : 'Copy'}
-              </button>
-            </div>
-            <div className="hint" style={{ marginTop: 8 }}>
-              Share your link — friends who open it join through your referral
-              (t.me bot/app ?startapp=ref_{user?.id}).
-              {refCount !== null && <> You have referred <b>{refCount}</b> user{refCount === 1 ? '' : 's'} so far.</>}
-            </div>
-          </>
-        ) : (
-          <div className="hint">Referral links are not configured yet (admin: set TELEGRAM_BOT_USERNAME + TELEGRAM_APP_SHORT_NAME).</div>
-        )}
       </div>
 
       <div className="card">

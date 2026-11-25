@@ -13,16 +13,12 @@ export async function GET() {
   }
   const settings = await getSettings();
   const botUsername = process.env.TELEGRAM_BOT_USERNAME || '';
-  const appShortName = process.env.TELEGRAM_APP_SHORT_NAME || '';
   return NextResponse.json({
     ...publicConfig(settings),
     market: MARKET_REFERENCE,
     telegram: {
       botUsername,
-      appShortName,
       officialChannel: process.env.OFFICIAL_CHANNEL_USERNAME || '',
-      referralBaseUrl:
-        botUsername && appShortName ? `https://t.me/${botUsername}/${appShortName}` : '',
     },
   });
 }

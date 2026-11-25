@@ -89,20 +89,14 @@ Market reference shown in the app (snapshot 25 Nov 2026): TRX ≈ $0.308 →
 ≈ 3.25 TRX per USDT at market. The fixed rate (3.50) is admin-set and may
 include a spread — update it when TRX moves (see SECURITY.md).
 
-## Telegram gate, referrals & support (telegram_mini_app skill)
+## Telegram gate & support (telegram_mini_app skill)
 
 - **Gated on Telegram identity.** The app waits for the Telegram WebApp
   script to expose `initData` before any backend call. A direct browser open
   shows a clear error: open the app from the bot's Mini App button, never the
   direct URL. `/admin` is the only ungated page (admins use a browser).
-  When `TELEGRAM_BOT_TOKEN` is set, `POST /api/orders/create` (and support /
-  referral endpoints) reject requests without valid `initData` (401).
-- **Referrals.** Link format: `t.me/<bot_username>/<app_short_name>?startapp=ref_<TELEGRAM_ID>`
-  — never bot-level `?start=` for Mini App referrals (it never reaches the
-  app). The Buy page shows the user's link + referral count.
-  Webhook fallback: a bot-level `/start ref_CODE` is recorded in
-  `pending_referrals` and attached on the user's first app open
-  (`POST /api/referrals/attach`).
+  When `TELEGRAM_BOT_TOKEN` is set, `POST /api/orders/create` (and support
+  endpoints) reject requests without valid `initData` (401).
 - **Bot webhook.** `/start` answers with a welcome message + **Open App**
   and **Official Channel** buttons. New joins, TRX-confirmed payments,
   completed payouts, and support messages are forwarded to the admin
@@ -196,12 +190,10 @@ table (DB overrides the env defaults):
 | `POST /api/admin/orders/[id]/reject-deposit` | Admin: reject a TXID_SUBMITTED order with a reason → FAILED + user DM |
 | `POST /api/admin/orders/[id]/mark-sent` | Admin: USDT sent manually, store TXID → COMPLETED |
 | `POST /api/admin/orders/[id]/reject` | Admin: reject an order |
-| `GET /api/referrals?telegram_id=…` | Referral count + link for a user |
-| `POST /api/referrals/attach` | Attach referrer on first app open (startapp or pending fallback) |
 | `POST /api/support` / `GET /api/support?telegram_id=…` | Send a support message / read the thread |
 | `GET /api/admin/support` | Support inbox (admin) |
 | `POST /api/admin/support/[id]/reply` | Admin reply — stored in-app + sent by Telegram DM |
-| `POST /api/webhook` | Telegram bot webhook: `/start` (welcome + Open App + Official Channel buttons, pending-referral fallback, new-join alert), `/help`, `/orders`, support DMs |
+| `POST /api/webhook` | Telegram bot webhook: `/start` (welcome + Open App + Official Channel buttons, new-join alert), `/help`, `/orders`, support DMs |
 
 ### Telegram identity note
 When `TELEGRAM_BOT_TOKEN` is set, `POST /api/orders/create` verifies the

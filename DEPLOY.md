@@ -26,8 +26,7 @@
 | `SUPABASE_SERVICE_ROLE_KEY` | yes | your Supabase service_role key |
 | `TELEGRAM_BOT_TOKEN` | yes* | bot token from @BotFather (see BOT_SETUP.md) |
 | `NEXT_PUBLIC_APP_URL` | yes | your Vercel URL, e.g. `https://trx-usdt-xxx.vercel.app` |
-| `TELEGRAM_BOT_USERNAME` | for referrals | bot username without @, e.g. `YourTrxUsdtBot` |
-| `TELEGRAM_APP_SHORT_NAME` | for referrals | Mini App short name from `/newapp` |
+| `TELEGRAM_BOT_USERNAME` | no | bot username without @, e.g. `YourTrxUsdtBot` (shown in `/api/config`) |
 | `OFFICIAL_CHANNEL_USERNAME` | no | official channel without @ — shown as a button in `/start` |
 | `ADMIN_TELEGRAM_ID` | recommended | your Telegram user ID — new-join, payment, payout + support alerts |
 | `TRX_PAYMENT_ADDRESS` | yes | **your** TRX wallet that receives customer payments (public address, starts with T) |
@@ -97,7 +96,6 @@ App (Menu Button or `/newapp`), set the webhook to
 - [ ] `USDT_HOT_WALLET_ADDRESS` is YOUR hot wallet, funded with USDT + TRX for fees
 - [ ] `ADMIN_PASSWORD` is strong and private
 - [ ] `TELEGRAM_BOT_TOKEN` set, webhook set, `/start` shows the Open App + Official Channel buttons
-- [ ] Referral link tested with a fresh account (`?startapp=ref_<ID>` records the referrer once)
 - [ ] Direct browser open of the app URL shows the "open from Telegram" error (gate works)
 - [ ] Fixed rate reviewed against the current TRX market price
 - [ ] Test order completed end-to-end (see §4)

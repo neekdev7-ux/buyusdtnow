@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, isSupabaseConfigured } from '@/lib/supabase';
 import { notifyAdmin, sendTelegramMessage } from '@/lib/notify';
-import { parseRefCode, recordPendingReferral } from '@/lib/referrals';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,11 +9,8 @@ const CHANNEL = process.env.OFFICIAL_CHANNEL_USERNAME || '';
 
 /**
  * POST /api/webhook — Telegram bot webhook.
- * - /start [ref_CODE]: welcome + Open App + Official Channel buttons.
- *   A bot-level /start ref_CODE is recorded as a PENDING referral (the
- *   startapp deep link is the real referral path — bot-level ?start= never
- *   reaches the Mini App, so the webhook stores it and the app attaches it
- *   on first open via /api/referrals/attach).
+ * - /start: welcome + Open App + Official Channel buttons.
+ *   (A /start argument, if any, is ignored — there is no invite system.)
  * - /help, /orders as before.
  * - Any other DM text: treated as a support message — stored and forwarded
  *   to the admin (ADMIN_TELEGRAM_ID).
@@ -51,16 +47,6 @@ export async function POST(req: NextRequest) {
   };
 
   if (text === '/start' || text.startsWith('/start ')) {
-    // Bot-level referral fallback: /start ref_CODE
-    const arg = text.startsWith('/start ') ? text.slice(7).trim() : '';
-    const referrerId = parseRefCode(arg);
-    if (referrerId && fromId && isSupabaseConfigured()) {
-      try {
-        await recordPendingReferral(String(fromId), referrerId);
-      } catch {
-        // Non-fatal: the startapp link is the primary referral path.
-      }
-    }
     await sendTelegramMessage(
       chatId,
       '👋 Welcome to the TRX → USDT Exchange!\n\n' +
@@ -72,9 +58,7 @@ export async function POST(req: NextRequest) {
     );
     // Forward the new join to the admin.
     if (fromId) {
-      void notifyAdmin(
-        `👤 New user joined: @${username || '—'} (id ${fromId})${referrerId ? ` via referral ref_${referrerId}` : ''}`,
-      );
+      void notifyAdmin(`👤 New user joined: @${username || '—'} (id ${fromId})`);
     }
   } else if (text === '/help') {
     await sendTelegramMessage(

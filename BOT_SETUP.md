@@ -44,7 +44,7 @@ the webhook route is failing — check Vercel logs.)
 
 | Command / event | Reply |
 |---|---|
-| `/start` | Welcome text + **Open App** button + **Official Channel** button. A `/start ref_CODE` is recorded as a pending referral (fallback for bot-level links) |
+| `/start` | Welcome text + **Open App** button + **Official Channel** button |
 | `/help` | How it works + commands |
 | `/orders` | The user's 5 most recent orders (by Telegram ID) |
 | Any other DM | Treated as a support message — stored + forwarded to the admin |
@@ -52,26 +52,7 @@ the webhook route is failing — check Vercel logs.)
 The bot never handles money itself — all orders, payments, and payouts go
 through the Mini App + API routes.
 
-## 5. Referral links (startapp)
-
-Referral links use the Mini App deep link, **never** bot-level `?start=`:
-
-```
-https://t.me/<BOT_USERNAME>/<APP_SHORT_NAME>?startapp=ref_<TELEGRAM_ID>
-```
-
-- `<BOT_USERNAME>` = `TELEGRAM_BOT_USERNAME`, `<APP_SHORT_NAME>` =
-  `TELEGRAM_APP_SHORT_NAME` (the short name you chose in `/newapp`).
-- When a friend opens that link, the app reads `start_param` (`ref_CODE`)
-  from `initData` and calls `POST /api/referrals/attach`.
-- Fallback: if someone shares a bot-level link `t.me/<BOT>?start=ref_CODE`,
-  the webhook records it in `pending_referrals` and the app attaches it on
-  first open.
-- Test with a fresh account: open the referral link, then check
-  `GET /api/referrals?telegram_id=<REFERRER_ID>` — the count must increment
-  by 1 and the referrer must be recorded once (re-opening does not duplicate).
-
-## 6. Admin notifications
+## 5. Admin notifications
 
 Set `ADMIN_TELEGRAM_ID` (your Telegram user ID — get it from @userinfobot) to
 receive: new joins (`/start`), TRX-confirmed payments, completed payouts

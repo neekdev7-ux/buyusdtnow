@@ -11,7 +11,6 @@ declare global {
         initData?: string;
         initDataUnsafe?: {
           user?: { id: number; username?: string; first_name?: string };
-          start_param?: string;
         };
         themeParams?: Record<string, string>;
         HapticFeedback?: { impact: (style: string) => void };
@@ -35,8 +34,6 @@ export interface TelegramState {
   hasInitData: boolean;
   user: TgUser | null;
   initData: string;
-  /** Mini-app start param, e.g. "ref_123456" from ?startapp=ref_123456. */
-  startParam: string;
 }
 
 /**
@@ -52,7 +49,6 @@ export function useTelegram(): TelegramState {
     hasInitData: false,
     user: null,
     initData: '',
-    startParam: '',
   });
 
   useEffect(() => {
@@ -72,7 +68,6 @@ export function useTelegram(): TelegramState {
           hasInitData: Boolean(initData),
           user: u ? { id: u.id, username: u.username, first_name: u.first_name } : null,
           initData,
-          startParam: tg.initDataUnsafe?.start_param || '',
         });
         done = true;
         clearInterval(timer);
