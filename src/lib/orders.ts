@@ -1,10 +1,12 @@
 import { db } from './supabase';
 import { base58ToHex, CONFIRMATIONS_REQUIRED, USDT_TRC20_CONTRACT } from './tron';
+import { trongridHeaders } from './txid';
 import { notifyAdmin } from './notify';
 import type { ExchangeSettings } from './settings';
 
 export type OrderStatus =
   | 'AWAITING_PAYMENT'
+  | 'TXID_SUBMITTED'
   | 'TRX_RECEIVED'
   | 'TRX_CONFIRMED'
   | 'USDT_SENDING'
@@ -28,18 +30,15 @@ export interface OrderRow {
   confirmations: number;
   usdt_txid: string | null;
   notes: string | null;
+  txid_submitted_at: string | null;
+  txid_submitted_by: string | null;
+  admin_review_note: string | null;
   expires_at: string;
   created_at: string;
   updated_at: string;
 }
 
 const TRONGRID = 'https://api.trongrid.io';
-
-function trongridHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (process.env.TRONGRID_API_KEY) headers['TRON-PRO-API-KEY'] = process.env.TRONGRID_API_KEY;
-  return headers;
-}
 
 interface TronGridTrxTx {
   txID: string;
@@ -142,15 +141,31 @@ export async function checkOrderPayment(
     return { status: 'TRX_RECEIVED', txid: matched.txID, confirmations };
   }
 
+  return handleConfirmedPayment(order, settings, matched.txID, fromHex, confirmations);
+}
+
+/**
+ * Shared post-confirmation path, used by BOTH checkOrderPayment (auto-detected
+ * payment) and the admin TXID confirm route — do not duplicate this logic.
+ * Marks the order TRX_CONFIRMED, notifies the admin, then auto-sends USDT if
+ * enabled (and within the cap) or leaves the order queued for manual payout.
+ */
+export async function handleConfirmedPayment(
+  order: OrderRow,
+  settings: ExchangeSettings,
+  txid: string,
+  fromHex: string | null,
+  confirmations: number,
+): Promise<{ status: OrderStatus; txid?: string; confirmations?: number; note?: string }> {
   await updateOrder(order.id, {
     status: 'TRX_CONFIRMED',
-    trx_txid: matched.txID,
+    trx_txid: txid,
     trx_from: fromHex,
     confirmations,
   });
   // Admin notification: payment confirmed, payout pending.
   void notifyAdmin(
-    `💰 TRX payment confirmed\nOrder ${order.id}\n${Number(order.usdt_amount).toLocaleString()} USDT → ${order.receive_address}\n${Number(order.trx_amount).toLocaleString()} TRX received (tx ${matched.txID})\nPayout pending — check /admin.`,
+    `💰 TRX payment confirmed\nOrder ${order.id}\n${Number(order.usdt_amount).toLocaleString()} USDT → ${order.receive_address}\n${Number(order.trx_amount).toLocaleString()} TRX received (tx ${txid})\nPayout pending — check /admin.`,
   );
 
   // Auto-send USDT if enabled and within the cap; otherwise queue for admin.
@@ -166,14 +181,14 @@ export async function checkOrderPayment(
       void notifyAdmin(
         `✅ Order completed (auto-send)\nOrder ${order.id}\n${Number(order.usdt_amount).toLocaleString()} USDT sent to ${order.receive_address}\nUSDT TX: ${usdtTxid}`,
       );
-      return { status: 'COMPLETED', txid: matched.txID, confirmations };
+      return { status: 'COMPLETED', txid, confirmations };
     } catch (err) {
       const note = `Auto-send failed: ${err instanceof Error ? err.message : String(err)}. Admin must send manually.`;
       await updateOrder(order.id, { status: 'TRX_CONFIRMED', notes: note });
-      return { status: 'TRX_CONFIRMED', txid: matched.txID, confirmations, note };
+      return { status: 'TRX_CONFIRMED', txid, confirmations, note };
     }
   }
-  return { status: 'TRX_CONFIRMED', txid: matched.txID, confirmations };
+  return { status: 'TRX_CONFIRMED', txid, confirmations };
 }
 
 /**
@@ -219,7 +234,11 @@ export async function updateOrder(id: string, patch: Partial<OrderRow>): Promise
     .eq('id', id);
 }
 
-/** Expire stale AWAITING_PAYMENT orders past their expiry. Returns count expired. */
+/**
+ * Expire stale AWAITING_PAYMENT orders past their expiry. Returns count expired.
+ * TXID_SUBMITTED orders are never expired here — the timer freezes while the
+ * admin reviews the submitted TXID (see lib/txid.ts canSubmitTxid).
+ */
 export async function expireStaleOrders(): Promise<number> {
   const { data } = await db()
     .from('orders')

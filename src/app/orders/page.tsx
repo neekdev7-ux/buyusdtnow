@@ -11,9 +11,21 @@ interface Order {
   status: string;
   trx_txid: string | null;
   usdt_txid: string | null;
+  txid_submitted_at: string | null;
   created_at: string;
   expires_at: string;
 }
+
+const STATUS_LABEL: Record<string, string> = {
+  AWAITING_PAYMENT: 'Awaiting payment',
+  TXID_SUBMITTED: 'TXID submitted — waiting for admin check',
+  TRX_RECEIVED: 'TRX received — confirming',
+  TRX_CONFIRMED: 'TRX confirmed — USDT payout queued',
+  USDT_SENDING: 'Sending USDT…',
+  COMPLETED: 'Completed',
+  EXPIRED: 'Expired',
+  FAILED: 'Failed',
+};
 
 export default function MyOrdersPage() {
   return (
@@ -102,11 +114,14 @@ function MyOrdersInner() {
           <div className="order-row" style={{ borderBottom: 'none', padding: 0 }}>
             <div className="top">
               <b>{Number(o.usdt_amount).toLocaleString()} USDT</b>
-              <span className={`status-pill status-${o.status}`}>{o.status}</span>
+              <span className={`status-pill status-${o.status}`}>{STATUS_LABEL[o.status] || o.status}</span>
             </div>
             <div className="meta">
               Pay: {Number(o.trx_amount).toLocaleString()} TRX<br />
               Created: {new Date(o.created_at).toLocaleString()}<br />
+              {o.status === 'TXID_SUBMITTED' && o.txid_submitted_at && (
+                <>TXID submitted: {new Date(o.txid_submitted_at).toLocaleString()}<br /></>
+              )}
               <a href={`/pay/${o.id}`}>View order →</a>
               {o.trx_txid && (
                 <> · <a href={`https://tronscan.org/#/transaction/${o.trx_txid}`} target="_blank" rel="noreferrer">TRX TX ↗</a></>

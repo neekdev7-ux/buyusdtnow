@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
     pendingPayouts: orders.filter((o) => o.status === 'TRX_CONFIRMED').length,
     completed: completed.length,
     awaiting: orders.filter((o) => o.status === 'AWAITING_PAYMENT').length,
+    txidSubmitted: orders.filter((o) => o.status === 'TXID_SUBMITTED').length,
   };
   return NextResponse.json({ orders, stats });
 }

@@ -79,3 +79,13 @@ create table if not exists support_messages (
 );
 create index if not exists idx_support_telegram on support_messages (telegram_id);
 create index if not exists idx_support_created on support_messages (created_at desc);
+
+-- Manual TXID deposit flow (2026-11-25): the user pastes the TRX TXID from
+-- TronLink / TronScan on the Pay page; the order moves to TXID_SUBMITTED and
+-- the 30-minute timer freezes while the admin verifies the TXID on TronGrid
+-- (/api/admin/orders/[id]/confirm-deposit) or rejects it with a reason
+-- (/api/admin/orders/[id]/reject-deposit). Safe to re-run.
+alter table orders add column if not exists txid_submitted_at timestamptz;
+alter table orders add column if not exists txid_submitted_by text;
+alter table orders add column if not exists admin_review_note text;
+create index if not exists idx_orders_txid_submitted on orders (status) where status = 'TXID_SUBMITTED';

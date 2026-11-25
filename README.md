@@ -45,6 +45,35 @@ User (Telegram Mini App)                Server (Next.js API)              TRON
 Order states: `AWAITING_PAYMENT → TRX_RECEIVED → TRX_CONFIRMED → USDT_SENDING → COMPLETED`
 (plus `EXPIRED` after 30 min unpaid, `FAILED` on amount mismatch / admin reject).
 
+### Manual TXID deposit flow
+
+If auto-detection misses a payment (or the user prefers it), the user can
+paste the TRX **Transaction ID (TXID)** from TronLink / TronScan on the Pay
+page while the order is still `AWAITING_PAYMENT` and the timer is running:
+
+```
+User submits TXID (64 hex chars) ──► POST /api/orders/[id]/submit-txid
+  → order becomes TXID_SUBMITTED, 30-min timer FREEZES (never expires
+    in this state), admin is notified on Telegram
+Admin in /admin → Pending TXID review ──► POST /api/admin/orders/[id]/confirm-deposit
+  → server verifies the TXID on TronGrid: tx exists + confirmed, transfer
+    to the payment address, amount == trx_amount_sun exactly, ≥ 19
+    confirmations. On success the order follows the normal confirmed path
+    (TRX_CONFIRMED → auto-send USDT if enabled, else payout queue) and the
+    user is DM'd "deposit confirmed, USDT payout is next".
+  → on failure (not_found / not_confirmed / wrong_recipient / wrong_amount)
+    the order is NOT changed; the admin sees the exact reason inline.
+Admin rejects instead ──► POST /api/admin/orders/[id]/reject-deposit { reason }
+  → order becomes FAILED with the reason stored (admin_review_note) and the
+    user is DM'd the reason + asked to contact support with the correct TXID.
+```
+
+Notifications (admin alert on submit, user DM on confirm/reject) need
+`TELEGRAM_BOT_TOKEN` + `ADMIN_TELEGRAM_ID` set; without them the flow still
+works but status is visible in-app only. TXID submission itself verifies the
+caller's Telegram `initData` (like order creation) when a bot token is set,
+so only the order's owner can submit its TXID.
+
 ## Defaults
 
 | Setting | Default | Change in |
@@ -87,9 +116,9 @@ include a spread — update it when TRX moves (see SECURITY.md).
 | Page | What it does |
 |---|---|
 | `/` (Buy) | Rate display, amount chips (1000/2000/5000/10000/20000) + custom input, TRC20 address input with validation + paste, live TRX-to-pay, Create Order |
-| `/pay/[id]` | Exact TRX amount, payment address + copy + QR code, 30-min countdown, 15s status polling, TronScan links, "I Have Paid" button |
+| `/pay/[id]` | Exact TRX amount, payment address + copy + QR code, 30-min countdown, 15s status polling, TronScan links, "I Have Paid" button, manual TXID submission (timer freezes while under admin review) |
 | `/orders` | The user's orders by Telegram ID, with status + TXIDs |
-| `/admin` | Password login (`ADMIN_PASSWORD`), change rate/wallets/min/max, stats, pending payouts, mark USDT sent (with TXID), reject orders |
+| `/admin` | Password login (`ADMIN_PASSWORD`), change rate/wallets/min/max, stats, pending TXID review (confirm/reject), pending payouts, mark USDT sent (with TXID), reject orders |
 
 ## API routes
 
@@ -100,10 +129,13 @@ include a spread — update it when TRX moves (see SECURITY.md).
 | `GET /api/orders/[id]` | One order (auto-expires on read) |
 | `GET /api/orders?telegram_id=…` | A user's orders |
 | `POST /api/orders/[id]/check` | Poll TronGrid for this order's payment |
+| `POST /api/orders/[id]/submit-txid` | User submits the TRX TXID (64 hex chars) → TXID_SUBMITTED, timer freezes, admin notified (verifies Telegram `initData` when `TELEGRAM_BOT_TOKEN` is set) |
 | `GET/POST /api/cron/check-payments` | Cron: check all pending orders + expire stale ones (every 2 min, `vercel.json`) |
 | `POST /api/admin/login` | Admin password → stateless HMAC token |
 | `GET/POST /api/admin/settings` | Read / update exchange settings |
-| `GET /api/admin/orders` | All orders + stats |
+| `GET /api/admin/orders` | All orders + stats (incl. `txidSubmitted` count) |
+| `POST /api/admin/orders/[id]/confirm-deposit` | Admin: verify the submitted TXID on TronGrid (≥ 19 conf, exact address + amount) → confirmed path + user DM |
+| `POST /api/admin/orders/[id]/reject-deposit` | Admin: reject a TXID_SUBMITTED order with a reason → FAILED + user DM |
 | `POST /api/admin/orders/[id]/mark-sent` | Admin: USDT sent manually, store TXID → COMPLETED |
 | `POST /api/admin/orders/[id]/reject` | Admin: reject an order |
 | `GET /api/referrals?telegram_id=…` | Referral count + link for a user |

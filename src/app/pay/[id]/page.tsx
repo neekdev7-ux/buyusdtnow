@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import QRCode from 'qrcode';
-import { copyText } from '@/lib/useTelegram';
+import { copyText, useTelegram } from '@/lib/useTelegram';
 import TelegramGate from '../../../components/TelegramGate';
 
 interface Order {
@@ -20,12 +20,15 @@ interface Order {
   confirmations: number;
   usdt_txid: string | null;
   notes: string | null;
+  txid_submitted_at: string | null;
+  admin_review_note: string | null;
   expires_at: string;
   created_at: string;
 }
 
 const STATUS_LABEL: Record<string, string> = {
   AWAITING_PAYMENT: 'Awaiting payment',
+  TXID_SUBMITTED: 'TXID submitted — waiting for admin check',
   TRX_RECEIVED: 'TRX received — confirming',
   TRX_CONFIRMED: 'TRX confirmed — USDT payout queued',
   USDT_SENDING: 'Sending USDT…',
@@ -45,6 +48,7 @@ export default function PayPage() {
 function PayPageInner() {
   const params = useParams();
   const id = String(params.id || '');
+  const { initData } = useTelegram();
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
   const [qr, setQr] = useState('');
@@ -52,6 +56,9 @@ function PayPageInner() {
   const [checking, setChecking] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [lastChecked, setLastChecked] = useState('');
+  const [txidInput, setTxidInput] = useState('');
+  const [txidBusy, setTxidBusy] = useState(false);
+  const [txidError, setTxidError] = useState('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchOrder = useCallback(async () => {
@@ -82,6 +89,29 @@ function PayPageInner() {
     }
   }, [id]);
 
+  const submitTxid = useCallback(async () => {
+    setTxidError('');
+    setTxidBusy(true);
+    try {
+      const res = await fetch(`/api/orders/${id}/submit-txid`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trx_txid: txidInput, initData }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setTxidError(j.error || 'Could not submit TXID.');
+        return;
+      }
+      setOrder(j.order);
+      setTxidInput('');
+    } catch {
+      setTxidError('Network error submitting TXID.');
+    } finally {
+      setTxidBusy(false);
+    }
+  }, [id, txidInput, initData]);
+
   useEffect(() => {
     fetchOrder();
   }, [fetchOrder]);
@@ -94,13 +124,16 @@ function PayPageInner() {
   }, [order?.payment_address]);
 
   // Poll every 15s while the order is still payable / confirming.
+  // TXID_SUBMITTED also polls (fetch only) so the admin's confirm/reject
+  // shows up — but no auto-check spam: the TXID is already under review.
   useEffect(() => {
     if (!order) return;
-    const active = ['AWAITING_PAYMENT', 'TRX_RECEIVED', 'TRX_CONFIRMED', 'USDT_SENDING'].includes(order.status);
+    const active = ['AWAITING_PAYMENT', 'TXID_SUBMITTED', 'TRX_RECEIVED', 'TRX_CONFIRMED', 'USDT_SENDING'].includes(order.status);
     if (!active) return;
+    const fetchOnly = order.status === 'TXID_SUBMITTED';
     timerRef.current = setInterval(() => {
       fetchOrder();
-      checkPayment();
+      if (!fetchOnly) checkPayment();
     }, 15000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -207,6 +240,51 @@ function PayPageInner() {
             {checking ? 'Checking…' : 'I Have Paid — Check Payment'}
           </button>
           {lastChecked && <div className="hint center" style={{ marginTop: 8 }}>Last checked: {lastChecked} · auto-checks every 15s</div>}
+
+          {!expired && (
+            <div style={{ marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+              <h2 style={{ marginTop: 0 }}>Submit Transaction ID (TXID)</h2>
+              <div className="hint" style={{ fontSize: 13, marginBottom: 8 }}>
+                Already sent the TRX but auto-check has not picked it up? Paste the
+                transaction hash here — find it in TronLink / TronScan under
+                Transaction Details → Transaction Hash. The admin will verify it
+                and the 30-minute timer freezes while it is under review.
+              </div>
+              <div className="input-row">
+                <input
+                  value={txidInput}
+                  onChange={(e) => setTxidInput(e.target.value)}
+                  placeholder="64-character transaction hash (e.g. a1b2c3…)"
+                  className="mono"
+                  style={{ flex: 1, minWidth: 0 }}
+                />
+                <button className="paste-btn" onClick={submitTxid} disabled={txidBusy || !txidInput.trim()}>
+                  {txidBusy ? 'Submitting…' : 'Submit'}
+                </button>
+              </div>
+              {txidError && <div className="hint error" style={{ marginTop: 8 }}>{txidError}</div>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {order.status === 'TXID_SUBMITTED' && (
+        <div className="card">
+          <h2>TXID submitted — waiting for admin check</h2>
+          <div className="hint" style={{ fontSize: 13 }}>
+            Your transaction ID was submitted{order.txid_submitted_at && (
+              <> on {new Date(order.txid_submitted_at).toLocaleString()}</>
+            )}. The admin is verifying it on TronGrid.
+            <b> The 30-minute timer is frozen</b> while your TXID is under review —
+            this order will not expire.
+          </div>
+          {order.trx_txid && (
+            <div className="summary-row" style={{ marginTop: 10 }}>
+              <span>Submitted TXID</span>
+              <b><a href={`https://tronscan.org/#/transaction/${order.trx_txid}`} target="_blank" rel="noreferrer">View on TronScan ↗</a></b>
+            </div>
+          )}
+          <div className="mono" style={{ marginTop: 8, fontSize: 12, wordBreak: 'break-all' }}>{order.trx_txid}</div>
         </div>
       )}
 
@@ -247,7 +325,7 @@ function PayPageInner() {
         <div className="error-box">
           {order.status === 'EXPIRED'
             ? 'This order expired before payment was received. Please create a new order.'
-            : 'This order failed. ' + (order.notes || 'Contact support with the order ID.')}
+            : 'This order failed. ' + (order.admin_review_note || order.notes || 'Contact support with the order ID.')}
         </div>
       )}
 

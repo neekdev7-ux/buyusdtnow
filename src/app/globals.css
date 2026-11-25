@@ -91,6 +91,7 @@ input { font-family: inherit; }
   font-size: 13px; font-weight: 800;
 }
 .status-AWAITING_PAYMENT { background: #2a2103; color: var(--warn); }
+.status-TXID_SUBMITTED { background: #2a1a03; color: #ffb84d; }
 .status-TRX_RECEIVED { background: #0d2a3a; color: #4db8ff; }
 .status-TRX_CONFIRMED { background: #0d2a3a; color: #4db8ff; }
 .status-USDT_SENDING { background: #0d2a3a; color: #4db8ff; }

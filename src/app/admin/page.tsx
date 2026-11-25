@@ -14,6 +14,8 @@ interface Order {
   trx_txid: string | null;
   usdt_txid: string | null;
   notes: string | null;
+  txid_submitted_at: string | null;
+  admin_review_note: string | null;
   created_at: string;
   expires_at: string;
 }
@@ -36,10 +38,12 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState('');
   const [settings, setSettings] = useState<Settings | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [stats, setStats] = useState<{ totalVolumeUsdt: number; pendingPayouts: number; completed: number; awaiting: number } | null>(null);
+  const [stats, setStats] = useState<{ totalVolumeUsdt: number; pendingPayouts: number; completed: number; awaiting: number; txidSubmitted: number } | null>(null);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
   const [txidInputs, setTxidInputs] = useState<Record<string, string>>({});
+  const [verifyResults, setVerifyResults] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const [verifyBusy, setVerifyBusy] = useState<Record<string, boolean>>({});
   const [supportMessages, setSupportMessages] = useState<Array<{ id: string; telegram_id: string; telegram_username: string | null; direction: string; message: string; created_at: string }>>([]);
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
   const [replySent, setReplySent] = useState('');
@@ -158,6 +162,50 @@ export default function AdminPage() {
     else loadAll(token);
   }
 
+  async function confirmDeposit(orderId: string) {
+    setVerifyBusy({ ...verifyBusy, [orderId]: true });
+    setError('');
+    const res = await fetch(`/api/admin/orders/${orderId}/confirm-deposit`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const j = await res.json();
+    setVerifyBusy({ ...verifyBusy, [orderId]: false });
+    if (!res.ok) {
+      setVerifyResults({
+        ...verifyResults,
+        [orderId]: {
+          ok: false,
+          text: j.reason
+            ? `Verification failed: ${j.reason}${j.detail?.confirmations !== undefined ? ` (${j.detail.confirmations} confirmations, 19 required)` : ''}${j.detail?.expected && j.detail?.actual ? ` — expected ${j.detail.expected}, got ${j.detail.actual}` : ''}. Order unchanged.`
+            : (j.error || 'Could not confirm deposit.'),
+        },
+      });
+      return;
+    }
+    setVerifyResults({
+      ...verifyResults,
+      [orderId]: {
+        ok: true,
+        text: `Verified ✓ ${j.verification?.confirmations ?? '?'} confirmations — order is now ${j.order?.status || 'TRX_CONFIRMED'}${j.order?.status === 'COMPLETED' ? ' (USDT auto-sent)' : ' (USDT payout queued)'}.`,
+      },
+    });
+    loadAll(token);
+  }
+
+  async function rejectDeposit(orderId: string) {
+    const reason = window.prompt('Reason for rejecting this deposit (shown to the user):');
+    if (!reason || !reason.trim()) return;
+    const res = await fetch(`/api/admin/orders/${orderId}/reject-deposit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ reason: reason.trim() }),
+    });
+    const j = await res.json();
+    if (!res.ok) setError(j.error || 'Could not reject deposit.');
+    else loadAll(token);
+  }
+
   if (!token) {
     return (
       <div className="wrap">
@@ -178,6 +226,7 @@ export default function AdminPage() {
   }
 
   const pendingPayouts = orders.filter((o) => o.status === 'TRX_CONFIRMED');
+  const pendingReview = orders.filter((o) => o.status === 'TXID_SUBMITTED');
 
   return (
     <div className="wrap">
@@ -197,6 +246,7 @@ export default function AdminPage() {
         <div className="card">
           <h2>Stats</h2>
           <div className="summary-row"><span>Total volume (completed)</span><b>{stats.totalVolumeUsdt.toLocaleString()} USDT</b></div>
+          <div className="summary-row"><span>TXIDs awaiting review</span><b>{stats.txidSubmitted}</b></div>
           <div className="summary-row"><span>Pending payouts</span><b>{stats.pendingPayouts}</b></div>
           <div className="summary-row"><span>Completed orders</span><b>{stats.completed}</b></div>
           <div className="summary-row"><span>Awaiting payment</span><b>{stats.awaiting}</b></div>
@@ -252,6 +302,35 @@ export default function AdminPage() {
             Private keys are never shown here and never stored in the database. The hot-wallet
             private key lives only in the server env (USDT_HOT_WALLET_PRIVATE_KEY).
           </div>
+        </div>
+      )}
+
+      {pendingReview.length > 0 && (
+        <div className="card">
+          <h2>🧾 Pending TXID review ({pendingReview.length}) — user submitted a TXID, verify on TronGrid</h2>
+          {pendingReview.map((o) => (
+            <div key={o.id} className="order-row">
+              <div className="top"><b>{Number(o.usdt_amount).toLocaleString()} USDT</b><span className="mono">{o.id.slice(0, 8)}…</span></div>
+              <div className="meta">
+                User: <span className="mono">@{o.telegram_username || o.telegram_id}</span> ({o.telegram_id})<br />
+                TRX to receive: {Number(o.trx_amount).toLocaleString()} TRX · To: <span className="mono">{o.receive_address}</span><br />
+                Submitted: {o.txid_submitted_at ? new Date(o.txid_submitted_at).toLocaleString() : '—'} · Timer frozen<br />
+                TXID: <span className="mono">{o.trx_txid}</span>{' '}
+                <a href={`https://tronscan.org/#/transaction/${o.trx_txid}`} target="_blank" rel="noreferrer">TronScan ↗</a>
+              </div>
+              <div className="input-row" style={{ marginTop: 8 }}>
+                <button className="paste-btn" onClick={() => confirmDeposit(o.id)} disabled={!!verifyBusy[o.id]}>
+                  {verifyBusy[o.id] ? 'Verifying…' : 'Confirm Deposit'}
+                </button>
+                <button className="btn-small" onClick={() => rejectDeposit(o.id)}>Reject</button>
+              </div>
+              {verifyResults[o.id] && (
+                <div className={verifyResults[o.id].ok ? 'notice' : 'error-box'} style={{ marginTop: 8 }}>
+                  {verifyResults[o.id].text}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

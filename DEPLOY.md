@@ -74,10 +74,20 @@ App (Menu Button or `/newapp`), set the webhook to
    Min buy to `1000`.
 3. Check `/admin` → pending payouts shows the confirmed order, and
    TronScan links work.
-4. Verify a wrong-amount payment is NOT credited: send a different TRX
+4. **Test the manual TXID flow:** on a fresh order, paste the TRX TXID on
+   the Pay page → status becomes `TXID_SUBMITTED`, the countdown disappears
+   (timer frozen) and the order does not expire. In `/admin` → Pending TXID
+   review, **Confirm Deposit** verifies it on TronGrid and moves the order
+   to `TRX_CONFIRMED` (or `COMPLETED` with auto-send); a wrong TXID shows
+   the exact reason (`not_found` / `wrong_amount` / `wrong_recipient` /
+   `not_confirmed`) and leaves the order unchanged. **Reject** with a reason
+   sets the order to `FAILED` and shows the reason on the Pay page.
+   Notifications for this flow need `TELEGRAM_BOT_TOKEN` +
+   `ADMIN_TELEGRAM_ID`; without them the flow works but status is in-app only.
+5. Verify a wrong-amount payment is NOT credited: send a different TRX
    amount to the payment address — the order must go to `FAILED` with an
    amount-mismatch note.
-5. If Supabase env is missing, every API route returns a clear 500
+6. If Supabase env is missing, every API route returns a clear 500
    `Supabase not configured — see DEPLOY.md` (no fake data is ever served).
 
 ## 5. Going live checklist
@@ -91,4 +101,7 @@ App (Menu Button or `/newapp`), set the webhook to
 - [ ] Direct browser open of the app URL shows the "open from Telegram" error (gate works)
 - [ ] Fixed rate reviewed against the current TRX market price
 - [ ] Test order completed end-to-end (see §4)
+- [ ] Manual TXID flow tested end-to-end (see §4 step 4) — admin knows to
+  check `/admin` → Pending TXID review; TXID_SUBMITTED orders never expire
+  while under review
 - [ ] Auto-send decision made (default OFF = manual payout; see SECURITY.md)
