@@ -26,7 +26,7 @@ User (Telegram Mini App)                Server (Next.js API)              TRON
   Pay page: QR + copy address
   Send exact TRX ───────────────────────────────────────────────► payment wallet
   Poll POST /api/orders/[id]/check ───► TronGrid: find TRX tx to
-  (every 15s) + cron every 2 min         payment address, value ==
+  (every 15s) + cron once daily         payment address, value ==
                                          trx_amount_sun exactly,
                                          block_timestamp >= created
                                        confirmations = current block
@@ -130,7 +130,7 @@ include a spread — update it when TRX moves (see SECURITY.md).
 | `GET /api/orders?telegram_id=…` | A user's orders |
 | `POST /api/orders/[id]/check` | Poll TronGrid for this order's payment |
 | `POST /api/orders/[id]/submit-txid` | User submits the TRX TXID (64 hex chars) → TXID_SUBMITTED, timer freezes, admin notified (verifies Telegram `initData` when `TELEGRAM_BOT_TOKEN` is set) |
-| `GET/POST /api/cron/check-payments` | Cron: check all pending orders + expire stale ones (every 2 min, `vercel.json`) |
+| `GET/POST /api/cron/check-payments` | Cron: check all pending orders + expire stale ones (once daily, `vercel.json`) |
 | `POST /api/admin/login` | Admin password → stateless HMAC token |
 | `GET/POST /api/admin/settings` | Read / update exchange settings |
 | `GET /api/admin/orders` | All orders + stats (incl. `txidSubmitted` count) |

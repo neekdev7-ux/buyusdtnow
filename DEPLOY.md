@@ -48,10 +48,10 @@
 with `verified: false` (Telegram identity unverified). Set it before going live.
 
 4. Deploy. Vercel Cron is already configured in `vercel.json`
-   (`/api/cron/check-payments` every 2 minutes). Note: Vercel Cron needs a
-   Pro plan for intervals under 1 hour on some plans — if the 2-min cron is
-   unavailable, the 15-second in-app polling on the Pay page still checks
-   payments while the user waits, and the admin can re-check from `/admin`.
+   (`/api/cron/check-payments` once daily at 00:00 UTC — the Hobby plan
+   allows only daily crons). The 15-second in-app polling on the Pay page
+   still checks payments while the user waits, users can submit their TXID,
+   and the admin can re-check from `/admin`.
    If you set `CRON_SECRET`, the cron URL must carry it — Vercel Cron cannot
    send a custom header, so use `?secret=YOUR_CRON_SECRET` in the cron path
    in `vercel.json` (keep the secret random and never share it).

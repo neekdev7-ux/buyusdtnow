@@ -5,7 +5,7 @@ import { checkOrderPayment, expireStaleOrders } from '@/lib/orders';
 
 export const dynamic = 'force-dynamic';
 
-// GET/POST /api/cron/check-payments — Vercel Cron (every 2 min, see vercel.json).
+// GET/POST /api/cron/check-payments — Vercel Cron (once daily, see vercel.json).
 // Checks every AWAITING_PAYMENT / TRX_RECEIVED order against TronGrid and
 // expires stale ones. Protected by CRON_SECRET when set:
 //   Authorization: Bearer <CRON_SECRET>
