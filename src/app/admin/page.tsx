@@ -282,7 +282,7 @@ export default function AdminPage() {
       </div>
 
       {error && <div className="error-box">{error}</div>}
-      {saved && <div className="notice" style={{ background: '#06281d', borderColor: '#0d5c40', color: '#7fe0b8' }}>{saved}</div>}
+      {saved && <div className="notice notice-ok">{saved}</div>}
 
       {stats && (
         <div className="card">
@@ -448,7 +448,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {replySent && <div className="notice" style={{ background: '#06281d', borderColor: '#0d5c40', color: '#7fe0b8' }}>{replySent}</div>}
+      {replySent && <div className="notice notice-ok">{replySent}</div>}
 
       <div className="card">
         <h2>Support inbox</h2>

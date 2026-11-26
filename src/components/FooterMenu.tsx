@@ -7,7 +7,7 @@ import { useIsAdmin } from '@/lib/useIsAdmin';
 /**
  * Bottom footer menubar — fixed, always visible, thumb-friendly.
  * Font Awesome 4.7 icons (fa fa-...) loaded via CDN in layout.tsx.
- * The active tab is highlighted in gold; inactive tabs are muted.
+ * The active tab is highlighted in sky blue; inactive tabs are muted.
  * Rendered inside each main page (Buy / Orders / Support / Admin / Pay)
  * — NOT in the root layout, so the Telegram gate screen stays untouched.
  *
